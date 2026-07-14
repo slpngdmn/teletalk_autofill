@@ -1,26 +1,26 @@
 {
 
-  "display_name":"Wahida Khatun",
+  "display_name": "MST. WAHIDA KHATUN",
 
-  "name": "wahida kahtun",
-  "name_bn": "সারোয়ার হোসেন ইমন",
+  "name": "MST. WAHIDA KHATUN",
+  "name_bn": "মোসাঃ অহিদা খাতুন",
 
-  "father": "MD. SEKENDER ALI SARDAR",
-  "father_bn": "মোঃ সেকেন্দার আলী সরদার",
+  "father": "MD. BABUL AKTER",
+  "father_bn": "মোঃ বাবুল আক্তার",
 
-  "mother": "NASRIN ZAHAN",
-  "mother_bn": "নাসরিন জাহান",
+  "mother": "MST. HALIMA BEGUM",
+  "mother_bn": "মোসাঃ হালিমা বেগম",
 
-  "dob": "2000-12-30",
+  "dob": "2001-04-02",
 
   "nationality": "Bangladeshi",
 
   "religion": "1",
 
-  "gender": "Male",
+  "gender": "Female",
 
   "nid": "1",
-  "nid_no": "1508598362",
+  "nid_no": "6015220889",
 
   "breg": "0",
   "breg_no": "",
@@ -30,52 +30,44 @@
 
   "marital_status": "Single",
 
-  "mobile": "0515151515",
-  "confirm_mobile": "0515151515",
+  "mobile": "01719120418",
+  "confirm_mobile": "01719120418",
 
-  "email": "wawdawdadjawd@gmail.com",
+  "email": "wahidaakhter47@gmail.com",
 
   "quota": "8",
   "quota_details": "",
 
   "dep_status": "5",
 
-  "present_careof": "MD. SEKENDER ALI SARDAR",
-  "present_village": "840, KHASH NAOGAON",
-  "present_district": "11",
-  "present_upazila": "82",
-  "present_post": "NAOGAON POURASAVA",
-  "present_postcode": "6500",
+  "present_careof": "MD. BABUL AKTER",
+  "present_village": "MOKIMPUR",
+  "present_district": "13",
+  "present_upazila": "98",
+  "present_post": "CHAK-KIRTY",
+  "present_postcode": "6341",
 
-"ssc_exam":"1",
-"ssc_roll":"117335",
-"ssc_group":"1",
-"ssc_board":"19",
-"ssc_result_type":"5",
-"ssc_result":"5.00",
-"ssc_year":"2015",
+  "ssc_exam": "1",
+  "ssc_roll": "112733",
+  "ssc_group": "1",
+  "ssc_board": "19",
+  "ssc_result_type": "5",
+  "ssc_result": "5.00",
+  "ssc_year": "2017",
 
-"hsc_exam":"1",
-"hsc_roll":"111719",
-"hsc_group":"1",
-"hsc_board":"19",
-"hsc_result_type":"5",
-"hsc_result":"5.00",
-"hsc_year":"2017",
+  "hsc_exam": "1",
+  "hsc_roll": "101625",
+  "hsc_group": "1",
+  "hsc_board": "19",
+  "hsc_result_type": "5",
+  "hsc_result": "4.92",
+  "hsc_year": "2019",
 
-"gra_exam":"4",
-"gra_institute":"331",
-"gra_year":"2023",
-"gra_subject":"402",
-"gra_result_type":"4",
-"gra_result":"3.24",
-"gra_duration":"04",
-
-"mas_exam": "1",
-"mas_institute":"331",
-"mas_year":"2025",
-"mas_subject":"131",
-"mas_result_type":"4",
-"mas_result":"3.18",
-"mas_duration":"01"
+  "gra_exam": "4",
+  "gra_institute": "331",
+  "gra_year": "2023",
+  "gra_subject": "155",
+  "gra_result_type": "4",
+  "gra_result": "3.36",
+  "gra_duration": "04"
 }

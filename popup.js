@@ -195,11 +195,15 @@ document.getElementById("fillBtn").addEventListener("click", async () => {
 
             // HSC
 
-            const hsc = document.getElementById("if_applicable_hsc");
+            if (profile.hsc_exam) {
 
-            if (hsc && !hsc.checked) {
+                const hsc = document.getElementById("if_applicable_hsc");
 
-                hsc.click();
+                if (hsc && !hsc.checked) {
+
+                    hsc.click();
+
+                }
 
             }
 
@@ -214,11 +218,15 @@ document.getElementById("fillBtn").addEventListener("click", async () => {
 
             // Graduation
 
-            const gra = document.getElementById("if_applicable_gra");
+            if (profile.gra_exam) {
 
-            if (gra && !gra.checked) {
+                const gra = document.getElementById("if_applicable_gra");
 
-                gra.click();
+                if (gra && !gra.checked) {
+
+                    gra.click();
+
+                }
 
             }
 
@@ -238,11 +246,15 @@ document.getElementById("fillBtn").addEventListener("click", async () => {
 
             // Postgraduation
 
-            const mas = document.getElementById("if_applicable_mas");
+            if (profile.mas_exam) {
 
-            if (mas && !mas.checked) {
+                const mas = document.getElementById("if_applicable_mas");
 
-                mas.click();
+                if (mas && !mas.checked) {
+
+                    mas.click();
+
+                }
 
             }
 
@@ -277,5 +289,11 @@ document.getElementById("fillBtn").addEventListener("click", async () => {
         args:[profile]
 
     });
+
+});
+
+document.getElementById("createProfileBtn").addEventListener("click", () => {
+
+    chrome.tabs.create({ url: chrome.runtime.getURL("create_profile/profile.html") });
 
 });
