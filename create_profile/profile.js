@@ -699,24 +699,42 @@ const upazilaDatabase = {
   ],
 };
 
-document.getElementById("jsonForm").addEventListener("submit", function (e) {
-  e.preventDefault();
-
+document.getElementById('jsonForm').addEventListener('submit', function(e) {
+  e.preventDefault(); 
+  
   const formData = new FormData(this);
   const jsonObject = {};
 
+  // 1. Grab all the visible fields from the form
   formData.forEach((value, key) => {
     jsonObject[key] = value;
   });
 
+  // 2. AUTOMATICALLY DUPLICATE VALUES FOR HIDDEN/REMOVED JSON KEYS
+  if (jsonObject['name']) {
+    jsonObject['display_name'] = jsonObject['name'];
+  } else {
+    jsonObject['display_name'] = ""; // Fallback if name is empty
+  }
+
+  if (jsonObject['mobile']) {
+    jsonObject['confirm_mobile'] = jsonObject['mobile'];
+  } else {
+    jsonObject['confirm_mobile'] = ""; // Fallback if mobile is empty
+  }
+
+  // (Optional) You can manually order the object if you want 'display_name' at the top, 
+  // but JSON parsers don't actually care about the order of keys!
+
+  // 3. Convert to JSON and trigger download
   const jsonString = JSON.stringify(jsonObject, null, 2);
-  const blob = new Blob([jsonString], { type: "application/json" });
+  const blob = new Blob([jsonString], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
 
   chrome.downloads.download({
     url: url,
-    filename: "saroar.json",
-    saveAs: true,
+    filename: 'saroar.json',
+    saveAs: true 
   });
 });
 

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Teletalk AutoFill",
-  "version": "3.5",
-  "description": "Teletalk Autofill",
+  "version": "3.7.1",
+  "description": "Input data into a form automatically and also generate and download a JSON file.",
 
   "permissions": [
     "activeTab",

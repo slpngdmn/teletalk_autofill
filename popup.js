@@ -297,3 +297,19 @@ document.getElementById("createProfileBtn").addEventListener("click", () => {
     chrome.tabs.create({ url: chrome.runtime.getURL("create_profile/profile.html") });
 
 });
+
+// Set version from manifest; works in extension context. Fallback to manifest.json fetch if needed.
+;(function(){
+    function setVersion(v){
+        var el = document.getElementById('version');
+        if(el) el.textContent = 'Version ' + v;
+    }
+    try{
+        if(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest){
+            var m = chrome.runtime.getManifest();
+            if(m && m.version) return setVersion(m.version);
+        }
+    }catch(e){}
+    // Fallback: fetch manifest.json
+    fetch('manifest.json').then(function(r){ return r.json(); }).then(function(j){ if(j && j.version) setVersion(j.version); }).catch(function(){});
+})();
