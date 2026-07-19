@@ -1,33 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Teletalk AutoFill",
-  "version": "3.7.1",
-  "description": "Input data into a form automatically and also generate and download a JSON file.",
-
-  "permissions": [
-    "activeTab",
-    "scripting",
-    "downloads"
-  ],
-
-  "host_permissions": [
-    "*://*.teletalk.com.bd/*"
-  ],
-
-  "web_accessible_resources": [
-    {
-      "resources": [
-    "profiles.json",
-    "profiles/*.json"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ],
-
+  "name": "BD Govt Job Autofill",
+  "version": "4.95",
+  "description": "Create profiles and auto-fill Teletalk Govt job applications.",
   "action": {
     "default_popup": "popup.html"
+  },
+  "permissions": ["storage", "scripting", "downloads"],
+
+  "host_permissions": ["*://*.teletalk.com.bd/*"],
+
+  "background": {
+    "service_worker": "background.js"
   },
 
   "icons": {
