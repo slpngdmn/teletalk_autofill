@@ -4,9 +4,11 @@ let subjectData = {};
 
 // --- NEW: CENTRALIZED APP STATE ---
 let appState = {
-  activeProfileName: null,
-  isDirty: false,
-  profiles: {}, // We will load all saved profiles into memory here
+    activeProfileName: null,
+    isDirty: false,
+    profiles: {},
+    currentPhoto: "", // Holds Base64 string
+    currentSig: ""    // Holds Base64 string
 };
 
 // --- 2. INITIALIZATION ---
@@ -86,6 +88,38 @@ function setupDynamicDropdowns() {
   setupExamListener("hsc_exam", "hsc_group");
 }
 
+// --- NEW: IMAGE TO BASE64 HANDLERS ---
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
+}
+
+document.getElementById('profilePhoto')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        appState.currentPhoto = await fileToBase64(file);
+        const preview = document.getElementById('photoPreview');
+        preview.src = appState.currentPhoto;
+        preview.style.display = 'block';
+        appState.isDirty = true;
+    }
+});
+
+document.getElementById('profileSignature')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        appState.currentSig = await fileToBase64(file);
+        const preview = document.getElementById('sigPreview');
+        preview.src = appState.currentSig;
+        preview.style.display = 'block';
+        appState.isDirty = true;
+    }
+});
+
 // --- 4. FORM HANDLING ---
 function getFormData() {
   const formData = new FormData(document.getElementById("jsonForm"));
@@ -98,19 +132,12 @@ function getFormData() {
   )?.checked
     ? "1"
     : "0";
-  return jsonObject;
-
-  // Checkbox values
-  jsonObject.same_as_present = document.querySelector(
-    '[name="same_as_present"]',
-  )?.checked
-    ? "1"
-    : "0";
 
   // Extra fields
   jsonObject.display_name = jsonObject.name || "";
   jsonObject.confirm_mobile = jsonObject.mobile || "";
-
+  jsonObject.photo_base64 = appState.currentPhoto || "";
+  jsonObject.signature_base64 = appState.currentSig || "";
   return jsonObject;
 }
 
@@ -231,6 +258,22 @@ function populateEditorTab() {
     if (header)
       header.textContent = `✏️ Editing: ${appState.activeProfileName}`;
     if (saveBtn) saveBtn.textContent = "💾 Update Profile";
+
+    // Setup Image Previews
+    appState.currentPhoto = data ? data.photo_base64 || "" : "";
+    appState.currentSig = data ? data.signature_base64 || "" : "";
+
+    const pPreview = document.getElementById("photoPreview");
+    const sPreview = document.getElementById("sigPreview");
+
+    pPreview.src = appState.currentPhoto;
+    pPreview.style.display = appState.currentPhoto ? "block" : "none";
+    sPreview.src = appState.currentSig;
+    sPreview.style.display = appState.currentSig ? "block" : "none";
+
+    // Reset file inputs visually
+    document.getElementById("profilePhoto").value = "";
+    document.getElementById("profileSignature").value = "";
 
     for (const key in data) {
       const field = form.querySelector(`[name="${key}"]`);
@@ -566,7 +609,7 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
 
         fill("marital_status", profile.marital_status);
         fill("mobile", profile.mobile);
-        fill("confirm_mobile", profile.confirm_mobile);
+        fill("confirm_mobile", profile.mobile);
         fill("email", profile.email);
         fill("quota", profile.quota);
         fill("dep_status", profile.dep_status);
@@ -668,6 +711,68 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
 
         check("same_as_present");
         check("agree");
+
+// ==========================================
+        // PHASE 5: VIRTUAL FILE UPLOADER (PAGE 2)
+        // ==========================================
+        function injectVirtualFile(base64Data, filename, keywords) {
+            // Guard: Check if the profile actually contains the image data
+            if (!base64Data || base64Data.trim() === "") {
+                console.log(`⚠️ Skipped ${filename}: No image found in your saved profile. Did you click 'Save Profile'?`);
+                return;
+            }
+            
+            const fileInputs = document.querySelectorAll('input[type="file"]');
+            let target = null;
+            
+            // Hunt for the correct file input by checking ID, Name, and Class
+            for (const el of fileInputs) {
+                const identifier = ((el.name || "") + " " + (el.id || "") + " " + (el.className || "")).toLowerCase();
+                
+                // If any of our keywords match the input's identity, we found it!
+                if (keywords.some(kw => identifier.includes(kw))) {
+                    target = el;
+                    break;
+                }
+            }
+
+            if (target) {
+                try {
+                    // Convert Base64 string back into a standard File object
+                    const arr = base64Data.split(',');
+                    const mime = arr[0].match(/:(.*?);/)[1];
+                    const bstr = atob(arr[1]);
+                    let n = bstr.length;
+                    const u8arr = new Uint8Array(n);
+                    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+                    const file = new File([u8arr], filename, { type: mime });
+
+                    // Use DataTransfer to simulate a user dragging and dropping a file
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    target.files = dt.files;
+                    
+                    // Trigger both input and change for React/Vue/jQuery compatibility
+                    target.dispatchEvent(new Event('input', { bubbles: true }));
+                    target.dispatchEvent(new Event('change', { bubbles: true }));
+                    
+                    target.style.border = "3px solid #4CAF50";
+                    console.log(`✅ Successfully uploaded: ${filename}`);
+                } catch (err) {
+                    console.error(`❌ Error converting or uploading ${filename}:`, err);
+                }
+            } else {
+                console.log(`⚠️ Could not find a file input box matching these words: ${keywords.join(", ")}`);
+            }
+        }
+
+        console.log("📸 Scanning for Photo and Signature fields...");
+        // Look for photo boxes using expanded keywords
+        injectVirtualFile(profile.photo_base64, "photo.jpg", ["photo", "pic", "image"]);
+        
+        // Look for signature boxes using expanded keywords
+        injectVirtualFile(profile.signature_base64, "signature.jpg", ["sig", "sign"]);
+
         console.log("✅ Auto-Fill Complete!");
       },
       // Pass the generated dictionary into the injection script!

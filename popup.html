@@ -1535,14 +1535,27 @@
         </details>
 
         <!-- ACTION BAR -->
-<div class="action-bar">
-            <button type="button" id="saveBtn" class="btn-save">Save New Profile</button>
-            <button type="button" id="duplicateBtn" class="btn-fill" style="background-color: #9c27b0; color: white;">Duplicate</button>
-            <button type="button" id="downloadBtn" class="btn-download">Download JSON</button>
-            <label class="btn-import">Import
-              <input type="file" id="importFile" accept=".json" style="display: none" />
-            </label>
-          </div>
+        <div class="section save-section">
+          <label class="full-width">📸 Upload Photo (300x300px)
+            <input type="file" id="profilePhoto" accept="image/jpeg, image/png" />
+          </label>
+          <img id="photoPreview" />
+        
+          <label class="full-width">✍️ Upload Signature (300x80px)
+            <input type="file" id="profileSignature" accept="image/jpeg, image/png" />
+          </label>
+          <img id="sigPreview" />
+        </div>
+        
+        <div class="action-bar">
+          <button type="button" id="saveBtn" class="btn-save">Save New Profile</button>
+          <button type="button" id="duplicateBtn" class="btn-fill"
+            style="background-color: #9c27b0; color: white;">Duplicate</button>
+          <button type="button" id="downloadBtn" class="btn-download">Download JSON</button>
+          <label class="btn-import">Import
+            <input type="file" id="importFile" accept=".json" style="display: none" />
+          </label>
+        </div>
       </form>
     </div>
     <script src="popup.js"></script>
