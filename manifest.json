@@ -1,19 +1,31 @@
 {
   "manifest_version": 3,
   "name": "BD Govt Job Autofill",
-  "version": "5.0",
+  "version": "5.3",
   "description": "Create profiles and auto-fill Teletalk Govt job applications.",
   "action": {
     "default_popup": "popup.html"
   },
-  "permissions": ["storage", "scripting", "downloads"],
-
-  "host_permissions": ["*://*.teletalk.com.bd/*"],
-
+  "permissions": [
+    "activeTab",
+    "storage", 
+    "scripting", 
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
-
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
   "icons": {
     "128": "icon.png"
   }

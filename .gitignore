@@ -14,8 +14,7 @@ venv.bak/
 
 # Google Calendar API credentials
 # It is extremely important that these remain untracked!
-backup/saroar.json
-backup/wahida.json
+backup/
 
 # IDE / Editor folders
 .vscode/

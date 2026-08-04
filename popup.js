@@ -47,7 +47,7 @@ function setupDynamicDropdowns() {
   // District -> Upazila
   document
     .querySelector('[name="present_district"]')
-    .addEventListener("change", function () {
+    ?.addEventListener("change", function () {
       const districtName = this.options[this.selectedIndex].text;
       const upazilaSelect = document.querySelector('[name="present_upazila"]');
       upazilaSelect.innerHTML =
@@ -68,7 +68,7 @@ function setupDynamicDropdowns() {
     const examSelect = document.querySelector(`[name="${examName}"]`);
     const subSelect = document.querySelector(`[name="${subjectName}"]`);
 
-    examSelect.addEventListener("change", function () {
+    examSelect?.addEventListener("change", function () {
       const selectedExam = this.options[this.selectedIndex].text;
       subSelect.innerHTML = '<option value="">-- Select Subject --</option>';
       if (subjectData[selectedExam]) {
@@ -86,6 +86,14 @@ function setupDynamicDropdowns() {
   setupExamListener("mas_exam", "mas_subject");
   setupExamListener("ssc_exam", "ssc_group");
   setupExamListener("hsc_exam", "hsc_group");
+}
+
+function whenDomReady(callback) {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", callback);
+  } else {
+    callback();
+  }
 }
 
 // --- NEW: IMAGE TO BASE64 HANDLERS ---
@@ -339,21 +347,6 @@ if (startBlankBtn) {
   });
 }
 
-const duplicateBtn = document.getElementById("duplicateBtn");
-if (duplicateBtn) {
-  duplicateBtn.addEventListener("click", () => {
-    if (!appState.activeProfileName)
-      return alert("Select a profile to duplicate first.");
-
-    document.getElementById("profileName").value += " (Copy)";
-    appState.activeProfileName = null;
-    appState.isDirty = true;
-    document.getElementById("editorHeader").textContent =
-      "📑 Duplicating Profile *(Unsaved)*";
-    document.getElementById("saveBtn").textContent = "💾 Save Duplicate";
-  });
-}
-
 const saveBtn = document.getElementById("saveBtn");
 if (saveBtn) {
   saveBtn.addEventListener("click", function () {
@@ -450,7 +443,13 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
   let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   chrome.storage.local.get(["savedProfiles"], async (result) => {
-    const dataToInject = result.savedProfiles[selectedProfile];
+    const profiles = result.savedProfiles || {};
+    const dataToInject = profiles[selectedProfile];
+    
+    if (!dataToInject) return alert("Error: Profile data could not be found!");
+
+    // ⚡ ARMS THE ZERO-CLICK WATCHER FOR PAGE 2
+    chrome.storage.local.set({ page2Armed: selectedProfile });
 
     // ==========================================
     // 🧠 BUILD THE MASTER DICTIONARY
@@ -488,7 +487,6 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
 
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      // Notice we are passing the dict into the function now!
       func: async (profile, dict) => {
         const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -533,30 +531,19 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
                 const optVal = el.options[i].value;
                 const optText = el.options[i].text.toLowerCase().trim();
 
-                // PRIORITY 1: Match by Visible Text (Fixes ID Shuffling like "19" vs "3")
                 if (expectedText && optText === expectedText) {
                   el.selectedIndex = i;
                   break;
                 }
 
-                // PRIORITY 2: Numeric Match (Fixes "082" vs "82")
-                if (
-                  !isNaN(optVal) &&
-                  !isNaN(value) &&
-                  optVal.trim() !== "" &&
-                  String(value).trim() !== ""
-                ) {
+                if (!isNaN(optVal) && !isNaN(value) && optVal.trim() !== "" && String(value).trim() !== "") {
                   if (Number(optVal) === Number(value)) {
                     el.selectedIndex = i;
                     break;
                   }
                 }
 
-                // PRIORITY 3: Loose String Fallback
-                if (
-                  optVal.toLowerCase().trim() === targetValStr ||
-                  optText === targetValStr
-                ) {
+                if (optVal.toLowerCase().trim() === targetValStr || optText === targetValStr) {
                   el.selectedIndex = i;
                   break;
                 }
@@ -580,9 +567,7 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
 
         console.log("🚀 Starting Smart Auto-Fill with Dictionary Logic...");
 
-        // ==========================================
         // PHASE 1: STATIC TEXT & TRIGGERS
-        // ==========================================
         fill("name", profile.name);
         fill("name_bn", profile.name_bn);
         fill("father", profile.father);
@@ -594,16 +579,15 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
         fill("religion", profile.religion);
         fill("gender", profile.gender);
 
-        const hasNid = profile.nid_no && profile.nid_no.trim() !== "";
+        const hasNid = profile.nid_no && String(profile.nid_no).trim() !== "";
         fill("nid", hasNid ? profile.nid : "No");
         if (hasNid) fill("nid_no", profile.nid_no);
 
-        const hasBreg = profile.breg_no && profile.breg_no.trim() !== "";
+        const hasBreg = profile.breg_no && String(profile.breg_no).trim() !== "";
         fill("breg", hasBreg ? profile.breg : "No");
         if (hasBreg) fill("breg_no", profile.breg_no);
 
-        const hasPassport =
-          profile.passport_no && profile.passport_no.trim() !== "";
+        const hasPassport = profile.passport_no && String(profile.passport_no).trim() !== "";
         fill("passport", hasPassport ? profile.passport : "No");
         if (hasPassport) fill("passport_no", profile.passport_no);
 
@@ -618,7 +602,6 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
         fill("present_village", profile.present_village);
         fill("present_post", profile.present_post);
         fill("present_postcode", profile.present_postcode);
-
         fill("present_district", profile.present_district);
 
         fill("ssc_roll", profile.ssc_roll);
@@ -654,14 +637,10 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
           fill("mas_exam", profile.mas_exam);
         }
 
-        // ==========================================
         // PHASE 2: WAIT FOR TELETALK SERVERS
-        // ==========================================
-        await sleep(1500); // Wait for 1.5 seconds to ensure all dynamic dropdowns are populated
+        await sleep(1500); 
 
-        // ==========================================
         // PHASE 3: FILL THE DEPENDENT DROPDOWNS
-        // ==========================================
         fill("present_upazila", profile.present_upazila);
         fill("ssc_board", profile.ssc_board);
         fill("ssc_group", profile.ssc_group);
@@ -679,23 +658,12 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
           fill("mas_subject", profile.mas_subject);
         }
 
-        // ==========================================
         // PHASE 4: FINAL CHECKBOXES & EXPERIENCES
-        // ==========================================
         await sleep(500);
 
         console.log("🔍 Scanning for Experience dropdowns...");
         const allSelects = document.querySelectorAll("select");
-        const protectedFields = [
-          "nid",
-          "breg",
-          "passport",
-          "gender",
-          "religion",
-          "quota",
-          "dep_status",
-          "marital_status",
-        ];
+        const protectedFields = ["nid", "breg", "passport", "gender", "religion", "quota", "dep_status", "marital_status"];
 
         allSelects.forEach((select) => {
           if (protectedFields.includes(select.name)) return;
@@ -710,26 +678,32 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
         });
 
         check("same_as_present");
-        check("agree");
+        check("agree"); // Checks the declaration box
 
-// ==========================================
-        // PHASE 5: VIRTUAL FILE UPLOADER (PAGE 2)
-        // ==========================================
+        // 🎯 CAPTCHA AUTO-FOCUS LOGIC
+        const captchaInput = document.getElementById('captcha');
+        if (captchaInput) {
+            captchaInput.style.border = "3px solid #ff9800";
+            captchaInput.style.backgroundColor = "#fff3e0";
+            captchaInput.style.boxShadow = "0 0 10px rgba(255, 152, 0, 0.8)";
+            
+            captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            setTimeout(() => {
+                captchaInput.focus();
+                console.log("🎯 CAPTCHA box focused for quick entry.");
+            }, 300);
+        }
+
+        // PHASE 5: VIRTUAL FILE UPLOADER (MANUAL BACKUP)
         function injectVirtualFile(base64Data, filename, keywords) {
-            // Guard: Check if the profile actually contains the image data
-            if (!base64Data || base64Data.trim() === "") {
-                console.log(`⚠️ Skipped ${filename}: No image found in your saved profile. Did you click 'Save Profile'?`);
-                return;
-            }
+            if (!base64Data || base64Data.trim() === "") return;
             
             const fileInputs = document.querySelectorAll('input[type="file"]');
             let target = null;
             
-            // Hunt for the correct file input by checking ID, Name, and Class
             for (const el of fileInputs) {
                 const identifier = ((el.name || "") + " " + (el.id || "") + " " + (el.className || "")).toLowerCase();
-                
-                // If any of our keywords match the input's identity, we found it!
                 if (keywords.some(kw => identifier.includes(kw))) {
                     target = el;
                     break;
@@ -738,7 +712,6 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
 
             if (target) {
                 try {
-                    // Convert Base64 string back into a standard File object
                     const arr = base64Data.split(',');
                     const mime = arr[0].match(/:(.*?);/)[1];
                     const bstr = atob(arr[1]);
@@ -747,35 +720,26 @@ document.getElementById("injectBtn").addEventListener("click", async () => {
                     while(n--){ u8arr[n] = bstr.charCodeAt(n); }
                     const file = new File([u8arr], filename, { type: mime });
 
-                    // Use DataTransfer to simulate a user dragging and dropping a file
                     const dt = new DataTransfer();
                     dt.items.add(file);
                     target.files = dt.files;
                     
-                    // Trigger both input and change for React/Vue/jQuery compatibility
                     target.dispatchEvent(new Event('input', { bubbles: true }));
                     target.dispatchEvent(new Event('change', { bubbles: true }));
                     
                     target.style.border = "3px solid #4CAF50";
-                    console.log(`✅ Successfully uploaded: ${filename}`);
                 } catch (err) {
-                    console.error(`❌ Error converting or uploading ${filename}:`, err);
+                    console.error(`❌ Error uploading ${filename}:`, err);
                 }
-            } else {
-                console.log(`⚠️ Could not find a file input box matching these words: ${keywords.join(", ")}`);
             }
         }
 
         console.log("📸 Scanning for Photo and Signature fields...");
-        // Look for photo boxes using expanded keywords
         injectVirtualFile(profile.photo_base64, "photo.jpg", ["photo", "pic", "image"]);
-        
-        // Look for signature boxes using expanded keywords
         injectVirtualFile(profile.signature_base64, "signature.jpg", ["sig", "sign"]);
 
         console.log("✅ Auto-Fill Complete!");
       },
-      // Pass the generated dictionary into the injection script!
       args: [dataToInject, masterDict],
     });
 
