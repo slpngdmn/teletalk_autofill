@@ -247,9 +247,10 @@ label:has(input[type="checkbox"]) {
 button, .action-bar label, #startBlankBtn {
   font-family: inherit;
   transition: var(--transition);
-  border-radius: 0.25rem;
+  border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
+  border: none;
 }
 
 /* Action bar: three controls aligned in one row, equal size and look */
@@ -258,31 +259,39 @@ button, .action-bar label, #startBlankBtn {
   gap: 10px;
 }
 .action-bar > * {
-  flex: 1 1 0;
+  flex: 1 1 1;
   min-width: 0; /* prevent overflow from long content */
 }
 .action-bar label, .action-bar button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 16px;
+  padding: 14px 16px;
   background-color: var(--accent-500);
   color: var(--color-white);
   border: none;
-  border-radius: 0.25rem;
+  border-radius: 6px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(201, 162, 39, 0.2);
 }
-.action-bar label:hover, .action-bar button:hover { background-color: var(--accent-600); }
+.action-bar label:hover, .action-bar button:hover { 
+  background-color: var(--accent-600);
+  box-shadow: 0 4px 12px rgba(201, 162, 39, 0.3);
+}
 
 .btn-fill, .btn-save, .btn-download, .btn-import, #startBlankBtn {
   width: 100%;
-  padding: 16px;
+  padding: 14px 16px;
   background-color: var(--accent-500);
   color: var(--color-white);
   border: none;
   font-size: 1rem;
-  box-shadow: 0 4px 15px rgba(201, 162, 39, 0.25);
+  font-weight: 600;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(201, 162, 39, 0.2);
 }
 
 .btn-fill:hover, .btn-save:hover, .btn-download:hover, .btn-import:hover, #startBlankBtn:hover { 
-  background-color: var(--accent-600); 
+  background-color: var(--accent-600);
+  box-shadow: 0 4px 12px rgba(201, 162, 39, 0.3);
 }

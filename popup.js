@@ -196,18 +196,54 @@ function switchTab(tab) {
 // ==========================================
 // 5. REACTIVE STATE & FORM SYNC
 // ==========================================
-function refreshProfileDropdown() {
-  chrome.storage.local.get(["savedProfiles"], function (result) {
+function refreshProfileDropdown(profileToSelect = null) {
+  // Now we ask Chrome for BOTH savedProfiles and the lastActiveProfile
+  chrome.storage.local.get(["savedProfiles", "lastActiveProfile"], function (result) {
     appState.profiles = result.savedProfiles || {};
+    const storedLastActive = result.lastActiveProfile;
     const selector = document.getElementById("profileSelector");
-    selector.innerHTML =
-      '<option value="">-- ➕ Create New Profile --</option>';
+    
+    // 1. Rebuild the dropdown HTML
+    selector.innerHTML = '<option value="">--Create New Profile--</option>';
+    
+    let lastProfileName = null;
     for (const profileName in appState.profiles) {
       const opt = document.createElement("option");
       opt.value = profileName;
       opt.textContent = profileName;
       selector.appendChild(opt);
+      lastProfileName = profileName; 
     }
+
+    // 2. Decide what to select (The Memory Logic)
+    let targetSelection = ""; 
+
+    if (profileToSelect && appState.profiles[profileToSelect]) {
+        // Priority 1: The profile you just explicitly asked for (like after saving)
+        targetSelection = profileToSelect;
+    } else if (appState.activeProfileName && appState.profiles[appState.activeProfileName]) {
+        // Priority 2: Keep the currently active profile selected while popup is open
+        targetSelection = appState.activeProfileName;
+    } else if (storedLastActive && appState.profiles[storedLastActive]) {
+        // Priority 3: MEMORY - Load the last profile used before you closed the popup
+        targetSelection = storedLastActive;
+    } else if (lastProfileName) {
+        // Priority 4: Fallback - Pick the most recently created profile
+        targetSelection = lastProfileName;
+    }
+
+    // 3. Apply the selection
+    selector.value = targetSelection;
+    appState.activeProfileName = targetSelection === "" ? null : targetSelection;
+    
+    // 4. Save this choice to memory for next time
+    if (appState.activeProfileName) {
+        chrome.storage.local.set({ lastActiveProfile: appState.activeProfileName });
+    }
+
+    // 5. Sync the visual UI
+    updatePreviewCard();
+    populateEditorTab();
   });
 }
 
@@ -231,23 +267,26 @@ function updatePreviewCard() {
   if (previewCard) previewCard.style.display = "block";
 }
 
-document
-  .getElementById("profileSelector")
-  .addEventListener("change", function () {
-    const selectedName = this.value;
-    if (
-      appState.isDirty &&
-      !confirm("You have unsaved changes in the editor. Discard them?")
-    ) {
-      this.value = appState.activeProfileName || "";
-      return;
-    }
-    appState.activeProfileName = selectedName === "" ? null : selectedName;
-    appState.isDirty = false;
+document.getElementById("profileSelector").addEventListener("change", function () {
+  const selectedName = this.value;
+  if (appState.isDirty && !confirm("You have unsaved changes in the editor. Discard them?")) {
+    this.value = appState.activeProfileName || "";
+    return;
+  }
+  
+  appState.activeProfileName = selectedName === "" ? null : selectedName;
+  appState.isDirty = false;
 
-    updatePreviewCard();
-    populateEditorTab();
-  });
+  // --- NEW MEMORY LOGIC ---
+  if (appState.activeProfileName) {
+      chrome.storage.local.set({ lastActiveProfile: appState.activeProfileName });
+  } else {
+      chrome.storage.local.remove("lastActiveProfile"); // Cleared if they pick "Create New"
+  }
+
+  updatePreviewCard();
+  populateEditorTab();
+});
 
 function populateEditorTab() {
   const form = document.getElementById("jsonForm");
@@ -342,6 +381,10 @@ if (startBlankBtn) {
     document.getElementById("profileSelector").value = "";
     appState.activeProfileName = null;
     appState.isDirty = false;
+
+    // --- NEW MEMORY LOGIC ---
+    chrome.storage.local.remove("lastActiveProfile");
+
     updatePreviewCard();
     populateEditorTab();
   });
@@ -361,10 +404,12 @@ if (saveBtn) {
 
     chrome.storage.local.set({ savedProfiles: appState.profiles }, () => {
       saveBtn.textContent = "✅ Saved!";
-      setTimeout(() => populateEditorTab(), 2000);
-      refreshProfileDropdown();
-      document.getElementById("profileSelector").value = newProfileName;
-      updatePreviewCard();
+      setTimeout(() => {
+          if(saveBtn) saveBtn.textContent = "💾 Update Profile"; 
+      }, 2000);
+      
+      // Tell the dropdown to rebuild AND select the newly saved profile
+      refreshProfileDropdown(newProfileName);
     });
   });
 }

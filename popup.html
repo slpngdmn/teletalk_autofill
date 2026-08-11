@@ -11,7 +11,7 @@
     <!-- TABS -->
     <div class="tabs">
       <button class="tab-btn active" id="tabAutofill">Auto-Fill</button>
-      <button class="tab-btn" id="tabProfile">Manage Profiles</button>
+      <button class="tab-btn" id="tabProfile">Edit Profiles</button>
     </div>
 
     <!-- VIEW 1: AUTOFILL SCREEN -->
@@ -44,9 +44,13 @@
     <div id="viewProfile" class="view">
       <form id="jsonForm">
         <!-- DYNAMIC HEADER & NEW BUTTON -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #1a73e8; padding-bottom: 5px;">
-            <h3 id="editorHeader" style="margin: 0; border: none;">Creating New Profile</h3>
-            <button type="button" id="startBlankBtn" class="btn-download" style="padding: 6px 12px; font-size: 12px; width: auto;">Blank Profile</button>
+          <div>
+            <h3 id="editorHeader">Create New Profile</h3>
+            <div class="action-bar">
+              <button type="button" id="downloadBtn" class="btn-download">Download JSON</button>
+              <label class="btn-import">Import<input type="file" id="importFile" accept=".json"/></label>
+              <button type="button" id="startBlankBtn" class="btn-download">Blank Profile</button>
+            </div>
           </div>
         <!-- Profile Save Name -->
         <div class="section save-section">
@@ -1536,12 +1540,12 @@
 
         <!-- ACTION BAR -->
         <div class="section save-section">
-          <label class="full-width">📸 Upload Photo (300x300px)
+          <label class="full-width">Upload Photo (300x300px)
             <input type="file" id="profilePhoto" accept="image/jpeg, image/png" />
           </label>
           <img id="photoPreview" />
         
-          <label class="full-width">✍️ Upload Signature (300x80px)
+          <label class="full-width">Upload Signature (300x80px)
             <input type="file" id="profileSignature" accept="image/jpeg, image/png" />
           </label>
           <img id="sigPreview" />
@@ -1549,10 +1553,6 @@
         
         <div class="action-bar">
           <button type="button" id="saveBtn" class="btn-save">Save New Profile</button>
-          <button type="button" id="downloadBtn" class="btn-download">Download JSON</button>
-          <label class="btn-import">Import
-            <input type="file" id="importFile" accept=".json" style="display: none" />
-          </label>
         </div>
       </form>
     </div>
