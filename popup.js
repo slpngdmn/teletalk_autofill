@@ -2,83 +2,92 @@
 let districtData = {};
 let subjectData = {};
 
-// --- NEW: CENTRALIZED APP STATE ---
+// Resolves once the JSON lookup tables are in memory. The UI never blocks on
+// it: only the dependent dropdowns wait for this.
+let dataReady = null;
+
+// --- CENTRALIZED APP STATE ---
 let appState = {
-    activeProfileName: null,
-    isDirty: false,
-    profiles: {},
-    currentPhoto: "", // Holds Base64 string
-    currentSig: ""    // Holds Base64 string
+  activeProfileName: null,
+  isDirty: false,
+  profiles: {},
+  currentPhoto: "", // Holds Base64 string
+  currentSig: "", // Holds Base64 string
 };
 
-// --- 2. INITIALIZATION ---
-document.addEventListener("DOMContentLoaded", async () => {
-  await loadAllData();
-  refreshProfileDropdown();
+const DYNAMIC_FIELDS = [
+  "present_upazila",
+  "gra_subject",
+  "mas_subject",
+  "ssc_group",
+  "hsc_group",
+  "ssc_board",
+  "hsc_board",
+];
 
-  // Attach Event Listeners once everything is loaded
+// --- 2. INITIALIZATION ---
+document.addEventListener("DOMContentLoaded", () => {
   setupDynamicDropdowns();
+  setupActionListeners();
+  dataReady = loadAllData();
+  refreshProfileDropdown();
 });
 
 async function loadAllData() {
   try {
-    const [distRes, gradRes, masRes, sscRes, hscRes] = await Promise.all([
-      fetch("data/districts.json"),
-      fetch("data/graduation.json"),
-      fetch("data/masters.json"),
-      fetch("data/ssc.json"),
-      fetch("data/hsc.json"),
-    ]);
+    const files = [
+      "data/districts.json",
+      "data/graduation.json",
+      "data/masters.json",
+      "data/ssc.json",
+      "data/hsc.json",
+    ];
+    const [dist, grad, mas, ssc, hsc] = await Promise.all(
+      files.map((f) => fetch(f).then((res) => res.json())),
+    );
 
-    districtData = await distRes.json();
-    const gData = await gradRes.json();
-    const mData = await masRes.json();
-    const sData = await sscRes.json();
-    const hData = await hscRes.json();
-
-    subjectData = { ...gData, ...mData, ...sData, ...hData };
+    districtData = dist;
+    subjectData = { ...grad, ...mas, ...ssc, ...hsc };
   } catch (err) {
-    console.error("❌ Error loading data:", err);
+    console.error("Autofill: error loading data", err);
   }
 }
 
 // --- 3. DYNAMIC DROPDOWN LOGIC ---
+function fillOptions(select, items, placeholder) {
+  const frag = document.createDocumentFragment();
+  const first = document.createElement("option");
+  first.value = "";
+  first.textContent = placeholder;
+  frag.appendChild(first);
+
+  (items || []).forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.name;
+    frag.appendChild(option);
+  });
+
+  select.replaceChildren(frag);
+}
+
 function setupDynamicDropdowns() {
-  // District -> Upazila
-  document
-    .querySelector('[name="present_district"]')
-    ?.addEventListener("change", function () {
-      const districtName = this.options[this.selectedIndex].text;
-      const upazilaSelect = document.querySelector('[name="present_upazila"]');
-      upazilaSelect.innerHTML =
-        '<option value="">-- Select Upazila --</option>';
+  const districtSelect = document.querySelector('[name="present_district"]');
+  districtSelect?.addEventListener("change", function () {
+    const upazilaSelect = document.querySelector('[name="present_upazila"]');
+    if (!upazilaSelect) return;
+    const districtName = this.selectedIndex >= 0 ? this.options[this.selectedIndex].text : "";
+    fillOptions(upazilaSelect, districtData[districtName], "-- Select Upazila --");
+  });
 
-      if (districtData[districtName]) {
-        districtData[districtName].forEach((upazila) => {
-          const option = document.createElement("option");
-          option.value = upazila.id;
-          option.textContent = upazila.name;
-          upazilaSelect.appendChild(option);
-        });
-      }
-    });
-
-  // Exam -> Subject Logic
   const setupExamListener = (examName, subjectName) => {
     const examSelect = document.querySelector(`[name="${examName}"]`);
     const subSelect = document.querySelector(`[name="${subjectName}"]`);
+    if (!examSelect || !subSelect) return;
 
-    examSelect?.addEventListener("change", function () {
-      const selectedExam = this.options[this.selectedIndex].text;
-      subSelect.innerHTML = '<option value="">-- Select Subject --</option>';
-      if (subjectData[selectedExam]) {
-        subjectData[selectedExam].forEach((sub) => {
-          const option = document.createElement("option");
-          option.value = sub.id;
-          option.textContent = sub.name;
-          subSelect.appendChild(option);
-        });
-      }
+    examSelect.addEventListener("change", function () {
+      const selectedExam = this.selectedIndex >= 0 ? this.options[this.selectedIndex].text : "";
+      fillOptions(subSelect, subjectData[selectedExam], "-- Select Subject --");
     });
   };
 
@@ -88,60 +97,42 @@ function setupDynamicDropdowns() {
   setupExamListener("hsc_exam", "hsc_group");
 }
 
-function whenDomReady(callback) {
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", callback);
+// --- IMAGE TO BASE64 HANDLERS ---
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
+}
+
+function setPreview(previewId, base64) {
+  const preview = document.getElementById(previewId);
+  if (!preview) return;
+  if (base64) {
+    preview.src = base64;
+    preview.style.display = "block";
   } else {
-    callback();
+    preview.removeAttribute("src");
+    preview.style.display = "none";
   }
 }
 
-// --- NEW: IMAGE TO BASE64 HANDLERS ---
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-    });
-}
-
-document.getElementById('profilePhoto')?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        appState.currentPhoto = await fileToBase64(file);
-        const preview = document.getElementById('photoPreview');
-        preview.src = appState.currentPhoto;
-        preview.style.display = 'block';
-        appState.isDirty = true;
-    }
-});
-
-document.getElementById('profileSignature')?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        appState.currentSig = await fileToBase64(file);
-        const preview = document.getElementById('sigPreview');
-        preview.src = appState.currentSig;
-        preview.style.display = 'block';
-        appState.isDirty = true;
-    }
-});
-
 // --- 4. FORM HANDLING ---
 function getFormData() {
-  const formData = new FormData(document.getElementById("jsonForm"));
+  const form = document.getElementById("jsonForm");
   const jsonObject = {};
-  formData.forEach((value, key) => {
+
+  new FormData(form).forEach((value, key) => {
     jsonObject[key] = value;
   });
-  jsonObject.same_as_present = document.querySelector(
-    '[name="same_as_present"]',
-  )?.checked
-    ? "1"
-    : "0";
 
-  // Extra fields
+  // FormData drops unchecked boxes, so persist every checkbox explicitly.
+  form.querySelectorAll('input[type="checkbox"][name]').forEach((box) => {
+    jsonObject[box.name] = box.checked ? "1" : "0";
+  });
+
   jsonObject.display_name = jsonObject.name || "";
   jsonObject.confirm_mobile = jsonObject.mobile || "";
   jsonObject.photo_base64 = appState.currentPhoto || "";
@@ -149,645 +140,629 @@ function getFormData() {
   return jsonObject;
 }
 
-function fillFormFromData(data) {
+function applyDynamicFields(data) {
+  const form = document.getElementById("jsonForm");
+  DYNAMIC_FIELDS.forEach((name) => {
+    const field = form.querySelector(`[name="${name}"]`);
+    if (field && data[name]) field.value = data[name];
+  });
+}
+
+function applyProfileToForm(data) {
+  const form = document.getElementById("jsonForm");
+
   for (const key in data) {
-    const field = document.querySelector(`[name="${key}"]`);
-    if (field) {
+    const field = form.querySelector(`[name="${key}"]`);
+    if (!field) continue;
+    if (field.type === "checkbox") {
+      field.checked = data[key] === "1" || data[key] === true;
+    } else {
       field.value = data[key];
-      // Trigger change to load dynamic dependencies (Upazilas/Subjects)
-      field.dispatchEvent(new Event("change"));
     }
+    field.dispatchEvent(new Event("change"));
   }
 
-  // Final validation delay to ensure dynamic options are populated before setting values
-  setTimeout(() => {
-    const fieldsToSet = [
-      "present_upazila",
-      "gra_subject",
-      "mas_subject",
-      "ssc_group",
-      "hsc_group",
-    ];
-    fieldsToSet.forEach((f) => {
-      if (data[f]) document.querySelector(`[name="${f}"]`).value = data[f];
-    });
-  }, 300);
+  // The dependent dropdowns can only be set once their options exist, which
+  // requires the JSON tables; awaiting the load beats guessing with a timeout.
+  applyDynamicFields(data);
+  Promise.resolve(dataReady).then(() => {
+    for (const name of ["present_district", "ssc_exam", "hsc_exam", "gra_exam", "mas_exam"]) {
+      const field = form.querySelector(`[name="${name}"]`);
+      if (field && data[name]) field.dispatchEvent(new Event("change"));
+    }
+    applyDynamicFields(data);
+  });
 }
 
 // --- 5. TAB SWITCHING ---
-document
-  .getElementById("tabAutofill")
-  .addEventListener("click", () => switchTab("Autofill"));
-document
-  .getElementById("tabProfile")
-  .addEventListener("click", () => switchTab("Profile"));
-
 function switchTab(tab) {
-  document
-    .querySelectorAll(".tab-btn")
-    .forEach((btn) => btn.classList.remove("active"));
-  document
-    .querySelectorAll(".view")
-    .forEach((view) => view.classList.remove("active-view"));
+  document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
+  document.querySelectorAll(".view").forEach((view) => view.classList.remove("active-view"));
   document.getElementById(`tab${tab}`).classList.add("active");
   document.getElementById(`view${tab}`).classList.add("active-view");
 }
 
 // ==========================================
-// 5. REACTIVE STATE & FORM SYNC
+// 6. REACTIVE STATE & FORM SYNC
 // ==========================================
 function refreshProfileDropdown(profileToSelect = null) {
-  // Now we ask Chrome for BOTH savedProfiles and the lastActiveProfile
   chrome.storage.local.get(["savedProfiles", "lastActiveProfile"], function (result) {
     appState.profiles = result.savedProfiles || {};
     const storedLastActive = result.lastActiveProfile;
     const selector = document.getElementById("profileSelector");
-    
-    // 1. Rebuild the dropdown HTML
-    selector.innerHTML = '<option value="">--Create New Profile--</option>';
-    
-    let lastProfileName = null;
-    for (const profileName in appState.profiles) {
+    const names = Object.keys(appState.profiles);
+
+    const frag = document.createDocumentFragment();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = names.length ? "-- Create New Profile --" : "-- No Profiles Saved Yet --";
+    frag.appendChild(placeholder);
+
+    names.forEach((profileName) => {
       const opt = document.createElement("option");
       opt.value = profileName;
       opt.textContent = profileName;
-      selector.appendChild(opt);
-      lastProfileName = profileName; 
-    }
+      frag.appendChild(opt);
+    });
+    selector.replaceChildren(frag);
 
-    // 2. Decide what to select (The Memory Logic)
-    let targetSelection = ""; 
-
+    let targetSelection = "";
     if (profileToSelect && appState.profiles[profileToSelect]) {
-        // Priority 1: The profile you just explicitly asked for (like after saving)
-        targetSelection = profileToSelect;
+      targetSelection = profileToSelect;
     } else if (appState.activeProfileName && appState.profiles[appState.activeProfileName]) {
-        // Priority 2: Keep the currently active profile selected while popup is open
-        targetSelection = appState.activeProfileName;
+      targetSelection = appState.activeProfileName;
     } else if (storedLastActive && appState.profiles[storedLastActive]) {
-        // Priority 3: MEMORY - Load the last profile used before you closed the popup
-        targetSelection = storedLastActive;
-    } else if (lastProfileName) {
-        // Priority 4: Fallback - Pick the most recently created profile
-        targetSelection = lastProfileName;
+      targetSelection = storedLastActive;
+    } else if (names.length) {
+      targetSelection = names[names.length - 1];
     }
 
-    // 3. Apply the selection
     selector.value = targetSelection;
-    appState.activeProfileName = targetSelection === "" ? null : targetSelection;
-    
-    // 4. Save this choice to memory for next time
-    if (appState.activeProfileName) {
-        chrome.storage.local.set({ lastActiveProfile: appState.activeProfileName });
-    }
-
-    // 5. Sync the visual UI
-    updatePreviewCard();
-    populateEditorTab();
+    setActiveProfile(targetSelection === "" ? null : targetSelection);
   });
 }
 
-// The Missing Function!
+function setActiveProfile(name) {
+  appState.activeProfileName = name;
+  if (name) {
+    chrome.storage.local.set({ lastActiveProfile: name });
+  } else {
+    chrome.storage.local.remove("lastActiveProfile");
+  }
+  updatePreviewCard();
+  populateEditorTab();
+}
+
 function updatePreviewCard() {
   const previewCard = document.getElementById("previewCard");
-  if (!appState.activeProfileName) {
+  const profile = appState.activeProfileName
+    ? appState.profiles[appState.activeProfileName]
+    : null;
+
+  if (!profile) {
     if (previewCard) previewCard.style.display = "none";
     return;
   }
-  const profile = appState.profiles[appState.activeProfileName];
-  if (document.getElementById("displayName"))
-    document.getElementById("displayName").textContent =
-      "👤 Name: " + (profile.name || "N/A");
-  if (document.getElementById("mobileInfo"))
-    document.getElementById("mobileInfo").textContent =
-      "📱 Mobile: " + (profile.mobile || "N/A");
-  if (document.getElementById("emailInfo"))
-    document.getElementById("emailInfo").textContent =
-      "📧 Email: " + (profile.email || "N/A");
+
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  set("displayName", "👤 Name: " + (profile.name || "N/A"));
+  set("mobileInfo", "📱 Mobile: " + (profile.mobile || "N/A"));
+  set("emailInfo", "📧 Email: " + (profile.email || "N/A"));
   if (previewCard) previewCard.style.display = "block";
 }
-
-document.getElementById("profileSelector").addEventListener("change", function () {
-  const selectedName = this.value;
-  if (appState.isDirty && !confirm("You have unsaved changes in the editor. Discard them?")) {
-    this.value = appState.activeProfileName || "";
-    return;
-  }
-  
-  appState.activeProfileName = selectedName === "" ? null : selectedName;
-  appState.isDirty = false;
-
-  // --- NEW MEMORY LOGIC ---
-  if (appState.activeProfileName) {
-      chrome.storage.local.set({ lastActiveProfile: appState.activeProfileName });
-  } else {
-      chrome.storage.local.remove("lastActiveProfile"); // Cleared if they pick "Create New"
-  }
-
-  updatePreviewCard();
-  populateEditorTab();
-});
 
 function populateEditorTab() {
   const form = document.getElementById("jsonForm");
   const header = document.getElementById("editorHeader");
   const saveBtn = document.getElementById("saveBtn");
   const profileNameInput = document.getElementById("profileName");
+  const data = appState.activeProfileName
+    ? appState.profiles[appState.activeProfileName]
+    : null;
 
-  if (!appState.activeProfileName) {
-    form.reset();
+  // Always start from a clean form, otherwise values from the previously
+  // selected profile survive into the one being loaded.
+  form.reset();
+  document.getElementById("profilePhoto").value = "";
+  document.getElementById("profileSignature").value = "";
+
+  appState.currentPhoto = data ? data.photo_base64 || "" : "";
+  appState.currentSig = data ? data.signature_base64 || "" : "";
+  setPreview("photoPreview", appState.currentPhoto);
+  setPreview("sigPreview", appState.currentSig);
+
+  if (!data) {
     profileNameInput.value = "";
     if (header) header.textContent = "✨ Creating New Profile";
     if (saveBtn) saveBtn.textContent = "💾 Save New Profile";
-  } else {
-    const data = appState.profiles[appState.activeProfileName];
-    profileNameInput.value = appState.activeProfileName;
-    if (header)
-      header.textContent = `✏️ Editing: ${appState.activeProfileName}`;
-    if (saveBtn) saveBtn.textContent = "💾 Update Profile";
+    return;
+  }
 
-    // Setup Image Previews
-    appState.currentPhoto = data ? data.photo_base64 || "" : "";
-    appState.currentSig = data ? data.signature_base64 || "" : "";
+  profileNameInput.value = appState.activeProfileName;
+  if (header) header.textContent = `✏️ Editing: ${appState.activeProfileName}`;
+  if (saveBtn) saveBtn.textContent = "💾 Update Profile";
 
-    const pPreview = document.getElementById("photoPreview");
-    const sPreview = document.getElementById("sigPreview");
+  applyProfileToForm(data);
+}
 
-    pPreview.src = appState.currentPhoto;
-    pPreview.style.display = appState.currentPhoto ? "block" : "none";
-    sPreview.src = appState.currentSig;
-    sPreview.style.display = appState.currentSig ? "block" : "none";
-
-    // Reset file inputs visually
-    document.getElementById("profilePhoto").value = "";
-    document.getElementById("profileSignature").value = "";
-
-    for (const key in data) {
-      const field = form.querySelector(`[name="${key}"]`);
-      if (field) {
-        if (field.type === "checkbox") {
-          field.checked = data[key] === "1";
-        } else {
-          field.value = data[key];
-        }
-        field.dispatchEvent(new Event("change"));
-      }
-    }
-
-    setTimeout(() => {
-      const dynamicFields = [
-        "present_upazila",
-        "gra_subject",
-        "mas_subject",
-        "ssc_group",
-        "hsc_group",
-        "ssc_board",
-        "hsc_board",
-      ];
-      dynamicFields.forEach((f) => {
-        const field = form.querySelector(`[name="${f}"]`);
-        if (field && data[f]) field.value = data[f];
-      });
-    }, 150);
+function markDirty(label) {
+  appState.isDirty = true;
+  const header = document.getElementById("editorHeader");
+  if (header && !header.textContent.includes("*(Unsaved)*")) {
+    header.textContent = (label || header.textContent) + " *(Unsaved)*";
   }
 }
 
-document.getElementById("jsonForm").addEventListener("input", () => {
-  if (!appState.isDirty) {
-    appState.isDirty = true;
-    const header = document.getElementById("editorHeader");
-    if (header && !header.textContent.includes("*(Unsaved)*")) {
-      header.textContent += " *(Unsaved)*";
-    }
-  }
-});
+// ==========================================
+// 7. ACTION BUTTON LISTENERS
+// ==========================================
+function setupActionListeners() {
+  document.getElementById("tabAutofill").addEventListener("click", () => switchTab("Autofill"));
+  document.getElementById("tabProfile").addEventListener("click", () => switchTab("Profile"));
 
-// ==========================================
-// 6. ACTION BUTTON LISTENERS
-// ==========================================
-const editShortcutBtn = document.getElementById("editShortcutBtn");
-if (editShortcutBtn) {
-  editShortcutBtn.addEventListener("click", () => {
-    if (!appState.activeProfileName)
-      return alert("Select a profile to edit first.");
+  document.getElementById("profilePhoto")?.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    appState.currentPhoto = await fileToBase64(file);
+    setPreview("photoPreview", appState.currentPhoto);
+    markDirty();
+  });
+
+  document.getElementById("profileSignature")?.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    appState.currentSig = await fileToBase64(file);
+    setPreview("sigPreview", appState.currentSig);
+    markDirty();
+  });
+
+  document.getElementById("jsonForm").addEventListener("input", () => {
+    if (!appState.isDirty) markDirty();
+  });
+
+  document.getElementById("profileSelector").addEventListener("change", function () {
+    const selectedName = this.value;
+    if (appState.isDirty && !confirm("You have unsaved changes in the editor. Discard them?")) {
+      this.value = appState.activeProfileName || "";
+      return;
+    }
+    appState.isDirty = false;
+    setActiveProfile(selectedName === "" ? null : selectedName);
+  });
+
+  document.getElementById("editShortcutBtn")?.addEventListener("click", () => {
     switchTab("Profile");
   });
-}
 
-const startBlankBtn = document.getElementById("startBlankBtn");
-if (startBlankBtn) {
-  startBlankBtn.addEventListener("click", () => {
+  document.getElementById("startBlankBtn")?.addEventListener("click", () => {
     if (appState.isDirty && !confirm("Discard unsaved changes?")) return;
     document.getElementById("profileSelector").value = "";
-    appState.activeProfileName = null;
     appState.isDirty = false;
-
-    // --- NEW MEMORY LOGIC ---
-    chrome.storage.local.remove("lastActiveProfile");
-
-    updatePreviewCard();
-    populateEditorTab();
+    setActiveProfile(null);
   });
-}
 
-const saveBtn = document.getElementById("saveBtn");
-if (saveBtn) {
-  saveBtn.addEventListener("click", function () {
+  document.getElementById("saveBtn")?.addEventListener("click", function () {
+    const saveBtn = this;
     const newProfileName = document.getElementById("profileName").value.trim();
-    if (!newProfileName)
-      return alert("Please enter a name to save this profile as!");
+    if (!newProfileName) return alert("Please enter a name to save this profile as!");
 
-    const finalData = getFormData();
-    appState.profiles[newProfileName] = finalData;
+    const previousName = appState.activeProfileName;
+    if (
+      previousName !== newProfileName &&
+      appState.profiles[newProfileName] &&
+      !confirm(`A profile named "${newProfileName}" already exists. Overwrite it?`)
+    ) {
+      return;
+    }
+
+    appState.profiles[newProfileName] = getFormData();
+    // Renaming should move the profile, not leave a stale duplicate behind.
+    if (previousName && previousName !== newProfileName) {
+      delete appState.profiles[previousName];
+    }
     appState.activeProfileName = newProfileName;
     appState.isDirty = false;
 
     chrome.storage.local.set({ savedProfiles: appState.profiles }, () => {
       saveBtn.textContent = "✅ Saved!";
       setTimeout(() => {
-          if(saveBtn) saveBtn.textContent = "💾 Update Profile"; 
-      }, 2000);
-      
-      // Tell the dropdown to rebuild AND select the newly saved profile
+        saveBtn.textContent = "💾 Update Profile";
+      }, 1200);
       refreshProfileDropdown(newProfileName);
     });
   });
-}
 
-const downloadBtn = document.getElementById("downloadBtn");
-if (downloadBtn) {
-  downloadBtn.addEventListener("click", function () {
-    const finalData = getFormData();
-    const jsonString = JSON.stringify(finalData, null, 2);
-    const blob = new Blob([jsonString], { type: "application/json" });
-    chrome.downloads.download({
-      url: URL.createObjectURL(blob),
-      filename:
-        (document.getElementById("profileName").value || "profile") + ".json",
-      saveAs: true,
+  document.getElementById("deleteBtn")?.addEventListener("click", () => {
+    const name = appState.activeProfileName;
+    if (!name) return alert("Select a saved profile to delete.");
+    if (!confirm(`Delete profile "${name}"? This cannot be undone.`)) return;
+
+    delete appState.profiles[name];
+    appState.activeProfileName = null;
+    appState.isDirty = false;
+    chrome.storage.local.set({ savedProfiles: appState.profiles }, () => {
+      chrome.storage.local.remove("lastActiveProfile");
+      refreshProfileDropdown();
     });
   });
-}
 
-const importFile = document.getElementById("importFile");
-if (importFile) {
-  importFile.addEventListener("change", function (event) {
+  document.getElementById("downloadBtn")?.addEventListener("click", function () {
+    const jsonString = JSON.stringify(getFormData(), null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    chrome.downloads.download(
+      {
+        url,
+        filename: (document.getElementById("profileName").value.trim() || "profile") + ".json",
+        saveAs: true,
+      },
+      () => {
+        if (chrome.runtime.lastError) alert("Download failed: " + chrome.runtime.lastError.message);
+      },
+    );
+  });
+
+  document.getElementById("importFile")?.addEventListener("change", function (event) {
     const file = event.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = function (e) {
+      let data;
       try {
-        const data = JSON.parse(e.target.result);
-        document.getElementById("profileName").value = file.name.replace(
-          ".json",
-          "",
-        );
-
-        appState.activeProfileName = null;
-        appState.isDirty = true;
-        document.getElementById("editorHeader").textContent =
-          "📂 Imported Profile *(Unsaved)*";
-
-        const form = document.getElementById("jsonForm");
-        for (const key in data) {
-          const field = form.querySelector(`[name="${key}"]`);
-          if (field) {
-            field.value = data[key];
-            field.dispatchEvent(new Event("change"));
-          }
-        }
-        setTimeout(() => {
-          const dynamicFields = [
-            "present_upazila",
-            "gra_subject",
-            "mas_subject",
-            "ssc_group",
-            "hsc_group",
-            "ssc_board",
-            "hsc_board",
-          ];
-          dynamicFields.forEach((f) => {
-            const field = form.querySelector(`[name="${f}"]`);
-            if (field && data[f]) field.value = data[f];
-          });
-        }, 150);
+        data = JSON.parse(e.target.result);
       } catch (error) {
         alert("Error reading JSON file.");
+        return;
       }
+
+      appState.activeProfileName = null;
+      document.getElementById("jsonForm").reset();
+      document.getElementById("profileName").value = file.name.replace(/\.json$/i, "");
+
+      // Imported images were previously dropped on the floor.
+      appState.currentPhoto = data.photo_base64 || "";
+      appState.currentSig = data.signature_base64 || "";
+      setPreview("photoPreview", appState.currentPhoto);
+      setPreview("sigPreview", appState.currentSig);
+
+      applyProfileToForm(data);
+      appState.isDirty = false;
+      markDirty("📂 Imported Profile");
+      switchTab("Profile");
     };
     reader.readAsText(file);
+    event.target.value = "";
   });
+
+  document.getElementById("injectBtn").addEventListener("click", runAutofill);
 }
 
-// --- 7. INJECTION LOGIC ---
+// --- 8. INJECTION LOGIC ---
+function buildMasterDict() {
+  const masterDict = {};
 
-document.getElementById("injectBtn").addEventListener("click", async () => {
+  document.querySelectorAll("#jsonForm select[name]").forEach((select) => {
+    masterDict[select.name] = {};
+    for (const opt of select.options) {
+      if (opt.value) masterDict[select.name][opt.value] = opt.text.trim();
+    }
+  });
+
+  masterDict["present_upazila"] = masterDict["present_upazila"] || {};
+  for (const dist in districtData) {
+    districtData[dist].forEach((upz) => {
+      masterDict["present_upazila"][upz.id] = upz.name.trim();
+    });
+  }
+
+  ["ssc_group", "hsc_group", "gra_subject", "mas_subject"].forEach((field) => {
+    masterDict[field] = masterDict[field] || {};
+    for (const exam in subjectData) {
+      subjectData[exam].forEach((sub) => {
+        masterDict[field][sub.id] = sub.name.trim();
+      });
+    }
+  });
+
+  return masterDict;
+}
+
+async function runAutofill() {
+  const injectBtn = document.getElementById("injectBtn");
   const selectedProfile = document.getElementById("profileSelector").value;
   if (!selectedProfile) return alert("Please select a profile first!");
 
-  let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.id) return alert("No active tab to fill.");
 
-  chrome.storage.local.get(["savedProfiles"], async (result) => {
-    const profiles = result.savedProfiles || {};
-    const dataToInject = profiles[selectedProfile];
-    
-    if (!dataToInject) return alert("Error: Profile data could not be found!");
+  injectBtn.disabled = true;
+  injectBtn.textContent = "Filling...";
 
-    // ⚡ ARMS THE ZERO-CLICK WATCHER FOR PAGE 2
-    chrome.storage.local.set({ page2Armed: selectedProfile });
+  try {
+    await Promise.resolve(dataReady);
 
-    // ==========================================
-    // 🧠 BUILD THE MASTER DICTIONARY
-    // We map every numeric ID to its actual visible text before injecting
-    // ==========================================
-    const masterDict = {};
+    const stored = await chrome.storage.local.get(["savedProfiles"]);
+    const dataToInject = (stored.savedProfiles || {})[selectedProfile];
+    if (!dataToInject) throw new Error("Profile data could not be found!");
 
-    // 1. Grab static options directly from the popup's HTML menus
-    document.querySelectorAll("select").forEach((select) => {
-      masterDict[select.name] = {};
-      for (let opt of select.options) {
-        if (opt.value) masterDict[select.name][opt.value] = opt.text.trim();
-      }
+    // Arms the zero-click watcher for page 2, with a timestamp so a stale arm
+    // can expire instead of firing on some unrelated page later.
+    await chrome.storage.local.set({
+      page2Armed: { profile: selectedProfile, ts: Date.now() },
     });
-
-    // 2. Add all dynamic Upazilas from your JSON data
-    if (!masterDict["present_upazila"]) masterDict["present_upazila"] = {};
-    for (const dist in districtData) {
-      districtData[dist].forEach((upz) => {
-        masterDict["present_upazila"][upz.id] = upz.name.trim();
-      });
-    }
-
-    // 3. Add all dynamic Education Groups/Subjects from your JSON data
-    const subFields = ["ssc_group", "hsc_group", "gra_subject", "mas_subject"];
-    subFields.forEach((field) => {
-      if (!masterDict[field]) masterDict[field] = {};
-      for (const exam in subjectData) {
-        subjectData[exam].forEach((sub) => {
-          masterDict[field][sub.id] = sub.name.trim();
-        });
-      }
-    });
-    // ==========================================
 
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: async (profile, dict) => {
-        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-        function fill(name, value) {
-          if (value === undefined || value === "") return;
-
-          const el =
-            document.getElementsByName(name)[0] ||
-            document.getElementById(name);
-          if (!el) return;
-
-          // Step 1: Try exact match first
-          el.value = value;
-
-          if (el.tagName === "SELECT") {
-            // Look up what the visible text SHOULD be based on the dictionary
-            const expectedText =
-              dict[name] && dict[name][value]
-                ? dict[name][value].toLowerCase().trim()
-                : null;
-
-            // Step 2: Check if the exact match was actually correct
-            let isCorrect = false;
-            if (el.selectedIndex >= 0) {
-              const currentText = el.options[el.selectedIndex].text
-                .toLowerCase()
-                .trim();
-              const currentVal = el.options[el.selectedIndex].value;
-
-              if (expectedText && currentText === expectedText) {
-                isCorrect = true; // Text matches perfectly
-              } else if (!expectedText && currentVal === String(value)) {
-                isCorrect = true; // No text known, but ID matched
-              }
-            }
-
-            // Step 3: If incorrect, SEARCH for the correct option
-            if (!isCorrect) {
-              const targetValStr = String(value).toLowerCase().trim();
-
-              for (let i = 0; i < el.options.length; i++) {
-                const optVal = el.options[i].value;
-                const optText = el.options[i].text.toLowerCase().trim();
-
-                if (expectedText && optText === expectedText) {
-                  el.selectedIndex = i;
-                  break;
-                }
-
-                if (!isNaN(optVal) && !isNaN(value) && optVal.trim() !== "" && String(value).trim() !== "") {
-                  if (Number(optVal) === Number(value)) {
-                    el.selectedIndex = i;
-                    break;
-                  }
-                }
-
-                if (optVal.toLowerCase().trim() === targetValStr || optText === targetValStr) {
-                  el.selectedIndex = i;
-                  break;
-                }
-              }
-            }
-          }
-
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-          el.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-
-        function check(name) {
-          const el =
-            document.getElementsByName(name)[0] ||
-            document.getElementById(name);
-          if (el && !el.checked) {
-            el.click();
-            el.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        }
-
-        console.log("🚀 Starting Smart Auto-Fill with Dictionary Logic...");
-
-        // PHASE 1: STATIC TEXT & TRIGGERS
-        fill("name", profile.name);
-        fill("name_bn", profile.name_bn);
-        fill("father", profile.father);
-        fill("father_bn", profile.father_bn);
-        fill("mother", profile.mother);
-        fill("mother_bn", profile.mother_bn);
-        fill("dob", profile.dob);
-        fill("nationality", profile.nationality);
-        fill("religion", profile.religion);
-        fill("gender", profile.gender);
-
-        const hasNid = profile.nid_no && String(profile.nid_no).trim() !== "";
-        fill("nid", hasNid ? profile.nid : "No");
-        if (hasNid) fill("nid_no", profile.nid_no);
-
-        const hasBreg = profile.breg_no && String(profile.breg_no).trim() !== "";
-        fill("breg", hasBreg ? profile.breg : "No");
-        if (hasBreg) fill("breg_no", profile.breg_no);
-
-        const hasPassport = profile.passport_no && String(profile.passport_no).trim() !== "";
-        fill("passport", hasPassport ? profile.passport : "No");
-        if (hasPassport) fill("passport_no", profile.passport_no);
-
-        fill("marital_status", profile.marital_status);
-        fill("mobile", profile.mobile);
-        fill("confirm_mobile", profile.mobile);
-        fill("email", profile.email);
-        fill("quota", profile.quota);
-        fill("dep_status", profile.dep_status);
-
-        fill("present_careof", profile.present_careof);
-        fill("present_village", profile.present_village);
-        fill("present_post", profile.present_post);
-        fill("present_postcode", profile.present_postcode);
-        fill("present_district", profile.present_district);
-
-        fill("ssc_roll", profile.ssc_roll);
-        fill("ssc_result_type", profile.ssc_result_type);
-        fill("ssc_result", profile.ssc_result);
-        fill("ssc_year", profile.ssc_year);
-        fill("ssc_exam", profile.ssc_exam);
-
-        if (profile.hsc_exam) {
-          check("if_applicable_hsc");
-          fill("hsc_roll", profile.hsc_roll);
-          fill("hsc_result_type", profile.hsc_result_type);
-          fill("hsc_result", profile.hsc_result);
-          fill("hsc_year", profile.hsc_year);
-          fill("hsc_exam", profile.hsc_exam);
-        }
-
-        if (profile.gra_exam) {
-          check("if_applicable_gra");
-          fill("gra_result_type", profile.gra_result_type);
-          fill("gra_result", profile.gra_result);
-          fill("gra_duration", profile.gra_duration);
-          fill("gra_year", profile.gra_year);
-          fill("gra_exam", profile.gra_exam);
-        }
-
-        if (profile.mas_exam) {
-          check("if_applicable_mas");
-          fill("mas_result_type", profile.mas_result_type);
-          fill("mas_result", profile.mas_result);
-          fill("mas_duration", profile.mas_duration);
-          fill("mas_year", profile.mas_year);
-          fill("mas_exam", profile.mas_exam);
-        }
-
-        // PHASE 2: WAIT FOR TELETALK SERVERS
-        await sleep(1500); 
-
-        // PHASE 3: FILL THE DEPENDENT DROPDOWNS
-        fill("present_upazila", profile.present_upazila);
-        fill("ssc_board", profile.ssc_board);
-        fill("ssc_group", profile.ssc_group);
-
-        if (profile.hsc_exam) {
-          fill("hsc_board", profile.hsc_board);
-          fill("hsc_group", profile.hsc_group);
-        }
-        if (profile.gra_exam) {
-          fill("gra_institute", profile.gra_institute);
-          fill("gra_subject", profile.gra_subject);
-        }
-        if (profile.mas_exam) {
-          fill("mas_institute", profile.mas_institute);
-          fill("mas_subject", profile.mas_subject);
-        }
-
-        // PHASE 4: FINAL CHECKBOXES & EXPERIENCES
-        await sleep(500);
-
-        console.log("🔍 Scanning for Experience dropdowns...");
-        const allSelects = document.querySelectorAll("select");
-        const protectedFields = ["nid", "breg", "passport", "gender", "religion", "quota", "dep_status", "marital_status"];
-
-        allSelects.forEach((select) => {
-          if (protectedFields.includes(select.name)) return;
-          for (let i = 0; i < select.options.length; i++) {
-            if (select.options[i].text.trim().toLowerCase() === "yes") {
-              select.selectedIndex = i;
-              select.dispatchEvent(new Event("input", { bubbles: true }));
-              select.dispatchEvent(new Event("change", { bubbles: true }));
-              break;
-            }
-          }
-        });
-
-        check("same_as_present");
-        check("agree"); // Checks the declaration box
-
-        // 🎯 CAPTCHA AUTO-FOCUS LOGIC
-        const captchaInput = document.getElementById('captcha');
-        if (captchaInput) {
-            captchaInput.style.border = "3px solid #ff9800";
-            captchaInput.style.backgroundColor = "#fff3e0";
-            captchaInput.style.boxShadow = "0 0 10px rgba(255, 152, 0, 0.8)";
-            
-            captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            setTimeout(() => {
-                captchaInput.focus();
-                console.log("🎯 CAPTCHA box focused for quick entry.");
-            }, 300);
-        }
-
-        // PHASE 5: VIRTUAL FILE UPLOADER (MANUAL BACKUP)
-        function injectVirtualFile(base64Data, filename, keywords) {
-            if (!base64Data || base64Data.trim() === "") return;
-            
-            const fileInputs = document.querySelectorAll('input[type="file"]');
-            let target = null;
-            
-            for (const el of fileInputs) {
-                const identifier = ((el.name || "") + " " + (el.id || "") + " " + (el.className || "")).toLowerCase();
-                if (keywords.some(kw => identifier.includes(kw))) {
-                    target = el;
-                    break;
-                }
-            }
-
-            if (target) {
-                try {
-                    const arr = base64Data.split(',');
-                    const mime = arr[0].match(/:(.*?);/)[1];
-                    const bstr = atob(arr[1]);
-                    let n = bstr.length;
-                    const u8arr = new Uint8Array(n);
-                    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-                    const file = new File([u8arr], filename, { type: mime });
-
-                    const dt = new DataTransfer();
-                    dt.items.add(file);
-                    target.files = dt.files;
-                    
-                    target.dispatchEvent(new Event('input', { bubbles: true }));
-                    target.dispatchEvent(new Event('change', { bubbles: true }));
-                    
-                    target.style.border = "3px solid #4CAF50";
-                } catch (err) {
-                    console.error(`❌ Error uploading ${filename}:`, err);
-                }
-            }
-        }
-
-        console.log("📸 Scanning for Photo and Signature fields...");
-        injectVirtualFile(profile.photo_base64, "photo.jpg", ["photo", "pic", "image"]);
-        injectVirtualFile(profile.signature_base64, "signature.jpg", ["sig", "sign"]);
-
-        console.log("✅ Auto-Fill Complete!");
-      },
-      args: [dataToInject, masterDict],
+      func: injectedFiller,
+      args: [dataToInject, buildMasterDict()],
     });
 
     window.close();
+  } catch (err) {
+    console.error("Autofill: injection failed", err);
+    alert("Auto-fill failed: " + (err && err.message ? err.message : err));
+    injectBtn.disabled = false;
+    injectBtn.textContent = "Auto-Fill";
+  }
+}
+
+// Runs inside the page. Must be self-contained.
+async function injectedFiller(profile, dict) {
+  const norm = (v) => String(v == null ? "" : v).toLowerCase().trim();
+
+  function getEl(name) {
+    return document.getElementsByName(name)[0] || document.getElementById(name);
+  }
+
+  function selectOption(el, value, expectedText) {
+    const target = norm(value);
+    const wanted = expectedText ? norm(expectedText) : "";
+    const options = Array.from(el.options);
+
+    // Ordered passes so an unrelated numeric id can never win over an exact
+    // label match, which used to select the wrong option.
+    const matchers = [
+      (opt) => wanted && norm(opt.text) === wanted,
+      (opt) => norm(opt.value) === target,
+      (opt) =>
+        opt.value.trim() !== "" &&
+        !isNaN(opt.value) &&
+        !isNaN(value) &&
+        Number(opt.value) === Number(value),
+      (opt) => norm(opt.text) === target,
+      (opt) => wanted && norm(opt.text).includes(wanted),
+    ];
+
+    for (const matcher of matchers) {
+      const index = options.findIndex(matcher);
+      if (index !== -1) {
+        el.selectedIndex = index;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function fill(name, value) {
+    if (value === undefined || value === null || value === "") return false;
+
+    const el = getEl(name);
+    if (!el) return false;
+
+    if (el.tagName === "SELECT") {
+      const expectedText = dict[name] ? dict[name][value] : null;
+      if (!selectOption(el, value, expectedText)) return false;
+    } else {
+      el.value = value;
+    }
+
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  function check(name) {
+    const el = getEl(name);
+    if (el && !el.checked) {
+      el.click();
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+
+  // Retries a field until the page has populated its dependent options,
+  // instead of waiting a fixed (and usually far too long) delay.
+  function fillWhenReady(name, value, deadline) {
+    if (value === undefined || value === null || value === "") return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      const attempt = () => {
+        if (fill(name, value)) return resolve(true);
+        if (Date.now() > deadline) return resolve(false);
+        setTimeout(attempt, 60);
+      };
+      attempt();
+    });
+  }
+
+  // PHASE 1: STATIC TEXT & TRIGGERS
+  const staticFields = [
+    "name",
+    "name_bn",
+    "father",
+    "father_bn",
+    "mother",
+    "mother_bn",
+    "dob",
+    "nationality",
+    "religion",
+    "gender",
+  ];
+  staticFields.forEach((f) => fill(f, profile[f]));
+
+  const hasNid = String(profile.nid_no || "").trim() !== "";
+  fill("nid", hasNid ? profile.nid : "No");
+  if (hasNid) fill("nid_no", profile.nid_no);
+
+  const hasBreg = String(profile.breg_no || "").trim() !== "";
+  fill("breg", hasBreg ? profile.breg : "No");
+  if (hasBreg) fill("breg_no", profile.breg_no);
+
+  const hasPassport = String(profile.passport_no || "").trim() !== "";
+  fill("passport", hasPassport ? profile.passport : "No");
+  if (hasPassport) fill("passport_no", profile.passport_no);
+
+  [
+    "marital_status",
+    "mobile",
+    "email",
+    "quota",
+    "dep_status",
+    "present_careof",
+    "present_village",
+    "present_post",
+    "present_postcode",
+    "present_district",
+    "ssc_roll",
+    "ssc_result_type",
+    "ssc_result",
+    "ssc_year",
+    "ssc_exam",
+  ].forEach((f) => fill(f, profile[f]));
+  fill("confirm_mobile", profile.mobile);
+
+  if (profile.hsc_exam) {
+    check("if_applicable_hsc");
+    ["hsc_roll", "hsc_result_type", "hsc_result", "hsc_year", "hsc_exam"].forEach((f) =>
+      fill(f, profile[f]),
+    );
+  }
+
+  if (profile.gra_exam) {
+    check("if_applicable_gra");
+    ["gra_result_type", "gra_result", "gra_duration", "gra_year", "gra_exam"].forEach((f) =>
+      fill(f, profile[f]),
+    );
+  }
+
+  if (profile.mas_exam) {
+    check("if_applicable_mas");
+    ["mas_result_type", "mas_result", "mas_duration", "mas_year", "mas_exam"].forEach((f) =>
+      fill(f, profile[f]),
+    );
+  }
+
+  // PHASE 2: DEPENDENT DROPDOWNS (filled as soon as the page loads them)
+  const deadline = Date.now() + 8000;
+  const dependent = [
+    ["present_upazila", profile.present_upazila],
+    ["ssc_board", profile.ssc_board],
+    ["ssc_group", profile.ssc_group],
+  ];
+  if (profile.hsc_exam) {
+    dependent.push(["hsc_board", profile.hsc_board], ["hsc_group", profile.hsc_group]);
+  }
+  if (profile.gra_exam) {
+    dependent.push(["gra_institute", profile.gra_institute], ["gra_subject", profile.gra_subject]);
+  }
+  if (profile.mas_exam) {
+    dependent.push(["mas_institute", profile.mas_institute], ["mas_subject", profile.mas_subject]);
+  }
+
+  await Promise.all(dependent.map(([name, value]) => fillWhenReady(name, value, deadline)));
+
+  // PHASE 3: EXPERIENCE-STYLE YES/NO DROPDOWNS
+  const handledNames = new Set([
+    ...staticFields,
+    "nid",
+    "breg",
+    "passport",
+    "quota",
+    "dep_status",
+    "marital_status",
+    ...dependent.map(([name]) => name),
+    "ssc_exam",
+    "hsc_exam",
+    "gra_exam",
+    "mas_exam",
+    "ssc_result_type",
+    "hsc_result_type",
+    "gra_result_type",
+    "mas_result_type",
+    "ssc_year",
+    "hsc_year",
+    "gra_year",
+    "mas_year",
+    "gra_duration",
+    "mas_duration",
+  ]);
+
+  document.querySelectorAll("select").forEach((select) => {
+    if (handledNames.has(select.name)) return;
+    // Never overwrite something the page or the user already answered.
+    if (select.value && select.value.trim() !== "") return;
+
+    const index = Array.from(select.options).findIndex((opt) => norm(opt.text) === "yes");
+    if (index !== -1) {
+      select.selectedIndex = index;
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   });
-});
+
+  check("same_as_present");
+  check("agree");
+
+  // PHASE 4: PHOTO / SIGNATURE
+  function injectVirtualFile(base64Data, filename, keywords) {
+    if (!base64Data || base64Data.trim() === "") return;
+
+    let target = null;
+    for (const el of document.querySelectorAll('input[type="file"]')) {
+      const identifier = (
+        (el.name || "") + " " + (el.id || "") + " " + (el.className || "")
+      ).toLowerCase();
+      if (keywords.some((kw) => identifier.includes(kw))) {
+        target = el;
+        break;
+      }
+    }
+    if (!target) return;
+
+    try {
+      const arr = base64Data.split(",");
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) u8arr[n] = bstr.charCodeAt(n);
+
+      const dt = new DataTransfer();
+      dt.items.add(new File([u8arr], filename, { type: mime }));
+      target.files = dt.files;
+
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      target.style.border = "3px solid #4CAF50";
+    } catch (err) {
+      console.error(`Autofill: could not attach ${filename}`, err);
+    }
+  }
+
+  injectVirtualFile(profile.photo_base64, "photo.jpg", ["photo", "pic", "image"]);
+  injectVirtualFile(profile.signature_base64, "signature.jpg", ["sig", "sign"]);
+
+  // PHASE 5: HAND OVER TO THE USER AT THE CAPTCHA
+  const captchaInput =
+    document.getElementById("captcha") || document.getElementsByName("captcha")[0];
+  if (captchaInput) {
+    captchaInput.style.border = "3px solid #ff9800";
+    captchaInput.style.backgroundColor = "#fff3e0";
+    captchaInput.style.boxShadow = "0 0 10px rgba(255, 152, 0, 0.8)";
+    captchaInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    captchaInput.focus();
+  }
+}

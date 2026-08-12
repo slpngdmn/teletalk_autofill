@@ -295,3 +295,27 @@ button, .action-bar label, #startBlankBtn {
   background-color: var(--accent-600);
   box-shadow: 0 4px 12px rgba(201, 162, 39, 0.3);
 }
+
+.btn-danger {
+  width: 100%;
+  padding: 14px 16px;
+  background-color: #b3261e;
+  color: var(--color-white);
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(179, 38, 30, 0.2);
+}
+
+.btn-danger:hover {
+  background-color: #8c1d18;
+  box-shadow: 0 4px 12px rgba(179, 38, 30, 0.3);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+  box-shadow: none;
+}
