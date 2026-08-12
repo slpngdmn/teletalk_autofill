@@ -1,26 +1,33 @@
-// Function to check the URL and set the badge
-function updateBadge(tabId, url) {
-    if (url && url.includes("teletalk.com.bd")) {
-        // Set the text to a thunder icon
-        chrome.action.setBadgeText({ text: "🗲", tabId: tabId });
-        // Set the background color to a nice orange/warning color
-        chrome.action.setBadgeBackgroundColor({ color: [0, 0, 0, 0], tabId: tabId });
-    } else {
-        // Clear the badge if you are on any other website (like Facebook, Google)
-        chrome.action.setBadgeText({ text: "", tabId: tabId });
-    }
+const TELETALK_HOST = /(^|\.)teletalk\.com\.bd$/i;
+
+function isTeletalk(url) {
+  try {
+    return TELETALK_HOST.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
 }
 
-// 1. Listen for when you switch between tabs
-chrome.tabs.onActivated.addListener((activeInfo) => {
-    chrome.tabs.get(activeInfo.tabId, (tab) => {
-        updateBadge(activeInfo.tabId, tab.url);
-    });
+function updateBadge(tabId, url) {
+  const text = isTeletalk(url) ? "🗲" : "";
+  chrome.action.setBadgeText({ text, tabId }, () => void chrome.runtime.lastError);
+  if (text) {
+    chrome.action.setBadgeBackgroundColor(
+      { color: [0, 0, 0, 0], tabId },
+      () => void chrome.runtime.lastError,
+    );
+  }
+}
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab) return;
+    updateBadge(tabId, tab.url);
+  });
 });
 
-// 2. Listen for when a page loads or changes its URL
+// Only reacts to URL/load changes, so typing in a page doesn't churn the badge.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (tab.url) {
-        updateBadge(tabId, tab.url);
-    }
+  if (!changeInfo.url && changeInfo.status !== "complete") return;
+  updateBadge(tabId, changeInfo.url || tab.url);
 });
